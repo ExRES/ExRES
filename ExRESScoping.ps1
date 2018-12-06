@@ -455,6 +455,8 @@ function Get-ExchangeUpdateName($build)
 {
 	switch($build)
 	{
+		#Exchange 2019
+		{$build -like "Version 15.2 (Build 221.12)"} {"Exchange 2019 RTM"}
 		#Exchange 2016
 		{$build -like "Version 15.1 (Build 225.16)"} {"Exchange 2016 RTM"}
 		{$build -like "Version 15.1 (Build 396.30)"} {"Exchange 2016 CU1"}
@@ -467,6 +469,7 @@ function Get-ExchangeUpdateName($build)
 		{$build -like "Version 15.1 (Build 1415.2)"} {"Exchange 2016 CU8"}
 		{$build -like "Version 15.1 (Build 1466.3)"} {"Exchange 2016 CU9"}
 		{$build -like "Version 15.1 (Build 1531.3)"} {"Exchange 2016 CU10"}
+		{$build -like "Version 15.1 (Build 1591.01)"} {"Exchange 2016 CU11"}
 		#Exchange 2013
 		{$build -like "Version 15.0 (Build 516.32)"} {"Exchange 2013 RTM"}
 		{$build -like "Version 15.0 (Build 620.29)"} {"Exchange 2013 CU1"}
@@ -649,6 +652,17 @@ Switch ($WhichExVer)
             $ExchangeVer = '2016'
             #Exchange major build
             $ExchangeBuild = '15.01'
+		}
+        #For Exchange 2019
+		{$WhichExVer -like "*15.2*"} {
+            #Get a list of Client Access Services (CAS)
+			$CASServers = $DAGServers
+            #Get additional info for CAS node
+			$CASConfig = ForEach ($CASSrv in $CASServers) {Get-ClientAccessService -IncludeAlternateServiceAccountCredentialStatus -Identity $CASSrv.Name | Select-Object Name, AutoDiscoverServiceInternalUri, AlternateServiceAccountConfiguration}
+            #Exchange version
+            $ExchangeVer = '2019'
+            #Exchange major build
+            $ExchangeBuild = '15.02'
 		}
 	}
 
