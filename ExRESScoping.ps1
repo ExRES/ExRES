@@ -11,8 +11,8 @@
  =================================================================================================================================
  
  Authors: Dmitriy Plokhih and Dmitry Goncharov
- Updated Script by Dmitry Goncharov at https://github.com/ExRES/ExRES
- Version 2018.08.20
+ Updated Script by Dmitry Goncharov at https://github.com/ExRES/ExRESScoping
+ Version 2.2-2018.12.06
 #>
 
 #HTML header for ExRESScoping.html report 
