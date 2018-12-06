@@ -1,2 +1,2 @@
 # ExRES
-Exchange Recovery Execution Service data collection
+Exchange Recovery Execution Service Scoping Data Collection
