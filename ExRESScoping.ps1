@@ -1,4 +1,4 @@
-﻿<#
+<#
  ==========[DISCLAIMER]===========================================================================================================
   This Sample Code is provided for the purpose of illustration only and is not intended to be used in a production environment.  
   THIS SAMPLE CODE AND ANY RELATED INFORMATION ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, 
@@ -13,6 +13,8 @@
  Authors: Dmitriy Plokhih and Dmitry Goncharov
  Updated Script by Dmitry Goncharov at https://github.com/ExRES/ExRESScoping
  Version 2.2-2018.12.06
+ Updated Script by Viktoria Gindosova and Alexey Shuvalov at https://github.com/ExRES/ExRESScoping
+ Version 2.3-2019.30.09 
 #>
 
 #HTML header for ExRESScoping.html report 
@@ -26,59 +28,62 @@ TD {border-width: 1px;padding: 3px;border-style: solid;border-color: black;}
 </style>
 "@
 
-function Create-ZipFile
-{
-<#
-.Synopsis
-   Archive a report to a ZIP file
-.DESCRIPTION
-   Archive ExRESScoping report (xml and html files) to a ZIP file
-.EXAMPLE
-   Archive reports in 'Documents' folder and create ExRESScoping.zip archive
-   ---------------------------------
-   $MyDocsPath = [Environment]::GetFolderPath("MyDocuments")
-   Create-ZipFile -dir $MyDocsPath
-.PARAMETER dir
-   Directory of collected xml files
-.PARAMETER mask
-   Wildcard mask for getting source files files for a archive. The default value covers ExRESScoping.html and ExRESScoping.xml files.
-.PARAMETER zipFileName
-   Name of a archive file. The default value is ExRESScoping.zip
+function Create-ZipFile {
+    <#
+    .Synopsis
+       Archive a report to a ZIP file
+    .DESCRIPTION
+       Archive ExRESScoping report (xml and html files) to a ZIP file
+    .EXAMPLE
+       Archive reports in 'Documents' folder and create ExRESScoping.zip archive
+       ---------------------------------
+       $MyDocsPath = [Environment]::GetFolderPath("MyDocuments")
+       Create-ZipFile -dir $MyDocsPath
+    .PARAMETER dir
+       Directory of collected xml files
+    .PARAMETER mask
+       Wildcard mask for getting source files files for a archive. The default value covers ExRESScoping.html and ExRESScoping.xml files.
+    .PARAMETER zipFileName
+       Name of a archive file. The default value is ExRESScoping.zip
+    #>
+    param
+    ( [string]$dir, #Directory of collected xml files
+      [string]$mask="ExRESScoping*.*l", #wildcard mask for getting ExRESScoping.html and ExRESScoping.xml files 
+      [string]$zipFileName="ExRESScoping.zip" # name of ZIP archive
 
-#>
-param
-( [string]$dir, #Directory of collected xml files
-  [string]$mask="ExRESScoping*.*l", #wildcard mask for getting ExRESScoping.html and ExRESScoping.xml files 
-  [string]$zipFileName="ExRESScoping.zip" # name of ZIP archive
+    )
+    #Full path to a ZIP file
+    $zipFilePath = Join-Path -Path $dir -ChildPath $zipFilename
 
-)
-#Full path to a ZIP file
-$zipFile = Join-Path -Path $dir -ChildPath $zipFilename
-#Wildcard mask for filtering source files for an archive
-$searchStr = Join-Path -Path $dir -ChildPath $mask
-
-#Prepare zip file. An old file will be overwritten
-    set-content $zipFile ("PK" + [char]5 + [char]6 + ("$([char]0)" * 18))
-#Remove "ReadOnly" flag for a ZIP file
-    (dir $zipFile).IsReadOnly = $false  
-
-#Get object for ZIP file management
-$shellApplication = new-object -com shell.application
-#Object for managing the prepared ZIP file
-$zipPackage = $shellApplication.NameSpace($zipFile)
-
-#Get files by using provided mask
-$files = Get-ChildItem -Path $searchStr | where{! $_.PSIsContainer}
-
-foreach($file in $files) { 
-    #Copy every file in "$Files" array to a archive
-    $zipPackage.CopyHere($file.FullName)
-#using this method, sometimes files can be 'skipped'
-#this 'while' loop checks each file is added before moving to the next
-    while($zipPackage.Items().Item($file.name) -eq $null){
-        Start-sleep -seconds 1
+    if (test-path -Path $zipFilePath -PathType leaf) {
+        remove-item -Path $zipFilePath -force
     }
-}
+    #Wildcard mask for filtering source files for an archive
+    $searchStr = Join-Path -Path $dir -ChildPath $mask
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    #create empty zip file
+    $zipFile = [System.IO.Compression.ZipFile]::Open($zipFilePath, 'create')
+
+    #unlock zip file
+    $zipFile.Dispose()
+
+    #set compression level
+    $compressionLevel = [System.IO.Compression.CompressionLevel]::Optimal
+
+    #Get files by using provided mask
+    $files = Get-ChildItem -Path $searchStr | where{! $_.PSIsContainer}
+
+    foreach($file in $files) { 
+        #Copy every file in "$Files" array to a archive
+        $zipFile = [System.IO.Compression.ZipFile]::Open($zipFilePath, 'update')
+
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zipFile, $file, (Split-Path $file -Leaf), $compressionLevel)
+
+        #unlock zip file
+        $zipFile.Dispose()
+    }
 }
 
 
@@ -346,6 +351,54 @@ function Get-DomainNetBIOSName
     }
 }
 
+function Get-ForestMode {
+    [CmdletBinding()]
+    Param
+    (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [int[]]
+        $forestModeLevel
+    )
+
+    switch($forestModeLevel)
+	{
+        {$forestModeLevel -like "0"} {"2000"}
+        {$forestModeLevel -like "1"} {"2003 Interim"}
+        {$forestModeLevel -like "2"} {"2003"}
+        {$forestModeLevel -like "3"} {"2008"}
+        {$forestModeLevel -like "4"} {"2008 R2"}
+        {$forestModeLevel -like "5"} {"2012"}
+        {$forestModeLevel -like "6"} {"2012 R2"}
+        {$forestModeLevel -like "7"} {"2016"}
+		default {"Unknown"}
+	}
+}
+
+function Get-DomainMode {
+    [CmdletBinding()]
+    Param
+    (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [int[]]
+        $domainModeLevel
+    )
+
+    switch($domainModeLevel)
+	{
+        {$domainModeLevel -like "0"} {"2000 Mixed/Native"}
+        {$domainModeLevel -like "1"} {"2003 Interim"}
+        {$domainModeLevel -like "2"} {"2003"}
+        {$domainModeLevel -like "3"} {"2008"}
+        {$domainModeLevel -like "4"} {"2008 R2"}
+        {$domainModeLevel -like "5"} {"2012"}
+        {$domainModeLevel -like "6"} {"2012 R2"}
+        {$domainModeLevel -like "7"} {"2016"}
+		default {"Unknown"}
+	}
+}
+
 function Get-ForestInfo
 {
 <#
@@ -366,7 +419,20 @@ function Get-ForestInfo
     (
     )
     #Start a static method of provided class to get an info about the current forest
-    [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
+    $forestData = [System.DirectoryServices.ActiveDirectory.Forest]::GetCurrentForest()
+    
+    if ($forestData.ForestMode -eq 'Unknown') {
+        
+        $forestData1 = New-Object -TypeName psobject
+        $forestData1 | add-member -MemberType NoteProperty -name Name -Value $forestData.Name
+        $forestData1 | add-member -MemberType NoteProperty -name ForestMode -Value (Get-ForestMode -forestModeLevel $forestData.ForestModeLevel)
+        $forestData1 | add-member -MemberType NoteProperty -name Domains -Value $forestData.Domains
+
+        return $forestData1
+    } else {
+    
+        return $forestData
+    }
 }
 
 
@@ -420,7 +486,7 @@ $DomainData = $Forest.Domains | ForEach-Object -Process {
             ParentDomain = $_.Parent
             #Combine all child domains in one string
             ChildDomains = ($_.Children | ForEach-Object {$_.Name}) -join ', '
-            DomainMode = $_.DomainMode
+            DomainMode = Get-DomainMode -domainModeLevel $_.DomainModeLevel
             DN = $_.GetDirectoryEntry().distinguishedName[0]
             #Get domain NETBIOS name
             NetBIOSName = Get-DomainNetBIOSName $_.Name -ErrorAction Stop
@@ -451,53 +517,6 @@ $xmlData += [PSCustomObject]@{Type="Org";Name=$OrgConfigData.Name}
 $OrgConfigHTML = $OrgConfigData | ConvertTo-Html -Fragment -As List -Property Name, AdminDisplayName -PreContent "<h2>Organization Info:</h2>" | Out-String
 
 #Resolve Build number to CU friendly name
-function Get-ExchangeUpdateName($build)
-{
-	switch($build)
-	{
-		#Exchange 2019
-		{$build -like "Version 15.2 (Build 221.12)"} {"Exchange 2019 RTM"}
-		#Exchange 2016
-		{$build -like "Version 15.1 (Build 225.16)"} {"Exchange 2016 RTM"}
-		{$build -like "Version 15.1 (Build 396.30)"} {"Exchange 2016 CU1"}
-		{$build -like "Version 15.1 (Build 466.34)"} {"Exchange 2016 CU2"}
-		{$build -like "Version 15.1 (Build 544.27)"} {"Exchange 2016 CU3"}
-		{$build -like "Version 15.1 (Build 669.32)"} {"Exchange 2016 CU4"}
-		{$build -like "Version 15.1 (Build 845.34)"} {"Exchange 2016 CU5"}
-		{$build -like "Version 15.1 (Build 1034.26)"} {"Exchange 2016 CU6"}
-		{$build -like "Version 15.1 (Build 1261.35)"} {"Exchange 2016 CU7"}
-		{$build -like "Version 15.1 (Build 1415.2)"} {"Exchange 2016 CU8"}
-		{$build -like "Version 15.1 (Build 1466.3)"} {"Exchange 2016 CU9"}
-		{$build -like "Version 15.1 (Build 1531.3)"} {"Exchange 2016 CU10"}
-		{$build -like "Version 15.1 (Build 1591.01)"} {"Exchange 2016 CU11"}
-		#Exchange 2013
-		{$build -like "Version 15.0 (Build 516.32)"} {"Exchange 2013 RTM"}
-		{$build -like "Version 15.0 (Build 620.29)"} {"Exchange 2013 CU1"}
-		{$build -like "Version 15.0 (Build 712.24)"} {"Exchange 2013 CU2"}
-		{$build -like "Version 15.0 (Build 775.38)"} {"Exchange 2013 CU3"}
-		{$build -like "Version 15.0 (Build 847.32)"} {"Exchange 2013 CU4"}
-		{$build -like "Version 15.0 (Build 913.22)"} {"Exchange 2013 CU5"}
-		{$build -like "Version 15.0 (Build 995.29)"} {"Exchange 2013 CU6"}
-		{$build -like "Version 15.0 (Build 1044.25)"} {"Exchange 2013 CU7"}
-		{$build -like "Version 15.0 (Build 1076.9)"} {"Exchange 2013 CU8"}
-		{$build -like "Version 15.0 (Build 1104.5)"} {"Exchange 2013 CU9"}
-		{$build -like "Version 15.0 (Build 1130.7)"} {"Exchange 2013 CU10"}
-		{$build -like "Version 15.0 (Build 1156.6)"} {"Exchange 2013 CU11"}
-		{$build -like "Version 15.0 (Build 1178.4)"} {"Exchange 2013 CU12"}
-		{$build -like "Version 15.0 (Build 1210.3)"} {"Exchange 2013 CU13"}
-		{$build -like "Version 15.0 (Build 1236.3)"} {"Exchange 2013 CU14"}
-		{$build -like "Version 15.0 (Build 1263.5)"} {"Exchange 2013 CU15"}
-		{$build -like "Version 15.0 (Build 1293.2)"} {"Exchange 2013 CU16"}
-		{$build -like "Version 15.0 (Build 1320.4)"} {"Exchange 2013 CU17"}
-		{$build -like "Version 15.0 (Build 1347.2)"} {"Exchange 2013 CU18"}
-		{$build -like "Version 15.0 (Build 1365.1)"} {"Exchange 2013 CU19"}
-		{$build -like "Version 15.0 (Build 1367.3)"} {"Exchange 2013 CU20"}
-		{$build -like "Version 15.0 (Build 1395.4)"} {"Exchange 2013 CU21"}
-		#Exchange 2010
-		{$build -like "Version 14.3 (Build 123.4)"} {"Exchange 2010 SP3"}
-		default {"Exchange 20??"}
-	}
-}
 
 #Get info for DAG that is created last
 $DAGData = Get-DatabaseAvailabilityGroup | Sort-Object WhenCreatedUTC -Descending | Select-Object -First 1
@@ -535,8 +554,7 @@ $ExchangeServers = $ExchangeSrvs | ForEach-Object {
         OSVersion = ''
         OSSPVersion = ''
         Disks = ''
-        #Get Exchange version
-        ExVersion = Get-ExchangeUpdateName($_.AdminDisplayVersion)
+        ExVersion = ''
         'IPv4 Addresses' = ''
         'Subnet Mask' = ''
         'Default Gateway' = ''
@@ -577,6 +595,23 @@ $ExchangeData = $ExchangeServers | where {$_.ServerRoles -notlike "*edge*"} | In
         $ResultObject.'Subnet Mask' = $IPConfig.'Subnet Mask'
         $ResultObject.'Default Gateway' = $IPConfig.'Default Gateway'
         $ResultObject.'DNS Servers' = $IPConfig.'DNS Servers' -join ','
+    }
+    #Get Exchange Version
+    $RegKey="SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Microsoft Exchange v15"
+    $RemoteRegistry = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $ResultObject.Fqdn);
+    if ($RemoteRegistry)
+    {
+        $ResultObject.ExVersion = $RemoteRegistry.OpenSubKey($RegKey).getvalue("DisplayName")
+        if ($ResultObject.ExVersion -like "*Service Pack*" -or $ResultObject.ExVersion -like "*Cumulative Update*")
+        {
+            $ResultObject.ExVersion = $ResultObject.ExVersion.Replace("Microsoft Exchange Server ","")
+            $ResultObject.ExVersion = $ResultObject.ExVersion.Replace("Service Pack ","SP")
+            $ResultObject.ExVersion = $ResultObject.ExVersion.Replace("Cumulative Update ","CU")
+        } else {
+            $ResultObject.ExVersion = 'Unknown'
+        }
+    } else {
+        $ResultObject.ExVersion = 'Unknown'
     }
     #Send the Result object to the function's output
     Write-Output $ResultObject
