@@ -630,8 +630,9 @@ $MailboxDBs = ForEach ($DAGSrv in $DAGServers){Get-MailboxDatabase -Server $DAGS
 $MailboxDBs =  $MailboxDBs | select -Unique
 
 #Prepare Database info objects and add them to the xmlData array
-$MailboxData = $MailboxDBs | Sort-Object Name | Select-Object Name, Server, EdbFilePath, LogFolderPath, MasterServerOrAvailabilityGroup, MasterType, Recovery, @{L='Copies';E={($_.DatabaseCopies | Select-Object -ExpandProperty HostServerName) -join ' '}}
-$MailboxData | %{$xmlData += [PSCustomObject]@{Type="DB";Name=$_.Name;EdbFilePath=$_.EdbFilePath;LogFolderPath=$_.LogFolderPath;DAG=$_.MasterServerOrAvailabilityGroup;MasterType=$_.MasterType;Recovery=$_.Recovery;Copies=$_.Copies}}
+$MailboxData = $MailboxDBs | Sort-Object Name | Select-Object Name, Server, EdbFilePath, LogFolderPath, MasterServerOrAvailabilityGroup, MasterType, Recovery, @{L='Guid';E={$_.Guid.ToString()}}, LogFilePrefix, @{L='Copies';E={($_.DatabaseCopies | Select-Object -ExpandProperty HostServerName) -join ' '}}
+$MailboxData | %{$xmlData += [PSCustomObject]@{Type="DB";Name=$_.Name;EdbFilePath=$_.EdbFilePath;LogFolderPath=$_.LogFolderPath;DAG=$_.MasterServerOrAvailabilityGroup;MasterType=$_.MasterType;Recovery=$_.Recovery;Copies=$_.Copies;Guid=$_.Guid;LogFilePrefix=$_.LogFilePrefix}}
+
 
 #Prepare HTML code for Database info
 $MailboxDBHTML = $MailboxData | ConvertTo-Html -Fragment -As Table -PreContent "<h2>Mailbox Databases:</h2>" | Out-String
@@ -650,6 +651,13 @@ $AcceptedDomainsData | ?{$_.Default -eq "True"} | %{$xmlData += [PSCustomObject]
 
 #Prepare HTML code for accepted email domains
 $AcceptedDomainsHTML = $AcceptedDomainsData | ConvertTo-Html -Property Name, DomainName, DomainType, Default -Fragment -As Table -PreContent "<h2>Accepted Domains:</h2>" | Out-String
+
+#Get default Offline Address Book (OAB)
+$OAB = Get-OfflineAddressBook | ? {$_.IsDefault }
+#Add default OAB to the xmlData array
+$OAB | %{$xmlData += [PSCustomObject]@{Type="OAB";Name=$_.Name}}
+#Prepare HTML code for OAB data
+$OabHTML = $OAB | ConvertTo-Html -Property Name -Fragment -As Table -PreContent "<h2>Default OAB:</h2>" | Out-String
 
 #Get Email address policy and prepare HTML code  
 $EmailAddressPoliciesHTML = Get-EmailAddressPolicy | ConvertTo-Html Name, Priority, EnabledPrimarySMTPAddressTemplate, IncludedRecipients -Fragment -As Table -PreContent "<h2>Email Address Policies:</h2>" | Out-String
@@ -744,7 +752,7 @@ $URLConfig += ForEach ($CASSrv in $CASServers){Get-AutodiscoverVirtualDirectory 
 $URLConfigHTML = $URLConfig | ConvertTo-Html -Fragment -As Table -PreContent "<h2>CAS URLs and Authentication:</h2>" | Out-String
 
 #Combine all HTML parts and save result to ExRESScoping.html file
-$Header + "<h1>Exchange Recovery Execution Service (ExRES) Scoping Tool</h1>" + $ForestHTML + $OrgConfigHTML + $DomainHTML + $SitesHTML + $SitesLinkHTML + $DAGsHTML + $ExchangeServersHTML + $EdgeHTML + $TCPIPHTML + $DAGNetworksHTML + $MailboxDBHTML + $AcceptedDomainsHTML + $EmailAddressPoliciesHTML + $CASConfigHTML + $URLConfigHTML | Out-File $HTMLOutPath -Force
+$Header + "<h1>Exchange Recovery Execution Service (ExRES) Scoping Tool</h1>" + $ForestHTML + $OrgConfigHTML + $DomainHTML + $SitesHTML + $SitesLinkHTML + $DAGsHTML + $ExchangeServersHTML + $EdgeHTML + $TCPIPHTML + $DAGNetworksHTML + $MailboxDBHTML + $AcceptedDomainsHTML + $OabHTML + $EmailAddressPoliciesHTML + $CASConfigHTML + $URLConfigHTML | Out-File $HTMLOutPath -Force
 #Save collected objects in xmlData array to xml file
 $xmlData | Export-Clixml -Path $XMLOutPath
 #Archive ExRESScoping.html and ExRESScoping.xml files to ExRESScoping.zip archive
